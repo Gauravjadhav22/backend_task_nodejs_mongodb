@@ -2,6 +2,8 @@ import { IPost, Post } from "../models/post";
 import { Request, Response, NextFunction } from "express";
 import Tag from "../models/tag";
 import { Types } from "mongoose";
+import { v2 as cloudinary } from "cloudinary";
+
 interface QueryParams {
   sort?: string;
   sortBy?: string;
@@ -102,14 +104,16 @@ const getPosts = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.log(error);
-
-    return res.status(500).json({ message: "something went wrong" });
+    return res.status(500).json({ error: error.message });
   }
 };
 const createPost = async (req: Request, res: Response) => {
   try {
     const tagIds = [];
-    for (const tagName of req.body.tags || []) {
+    let tags = JSON.parse(req.body.tags);;
+ 
+  
+    for (const tagName of tags || []) {
       let tag = await Tag.findOne({ name: tagName });
       if (!tag) {
         tag = new Tag({ name: tagName });
@@ -117,19 +121,47 @@ const createPost = async (req: Request, res: Response) => {
       }
       tagIds.push(tag?._id);
     }
-    const payload = req.body as IPost;
-    const newPost = new Post({
-      ...payload,
+    const imageUrls: string[] = [];
+    if (req.files && Array.isArray(req.files)) {
+        const uploadPromises = req.files.map((file,index) => {
+            return new Promise<string>((resolve, reject) => {
+              const stream = cloudinary.uploader.upload_stream(
+                {
+                  folder: "nodejsTask",
+                  use_filename: false,
+                  unique_filename: true,
+                  overwrite: false,
+                },
+                (error, result) => {
+                  if (error) return reject(error);
+                  resolve(result.secure_url);
+                }
+              );
+              stream.end(req.files[index].buffer);
+            });
+          });
+      
+          const results = await Promise.all(uploadPromises);
+          imageUrls.push(...results);
+    } else {
+      return res.status(400).json({ message: "Image file is required" });
+    }
+    const payload = {
+      title: req.body.title,
+      desc: req.body.desc,
+      image: imageUrls,
       tags: tagIds,
-    });
+    } as IPost;
+
+    const newPost = new Post(payload);
 
     // Save the new post
     await newPost.save();
-    return res.json(newPost).status(201);
+    return res.status(201).json(newPost);
   } catch (error) {
     console.log(error);
 
-    return res.status(500).json({ message: "something went wrong" });
+    return res.status(500).json({ error: error.message });
   }
 };
 
