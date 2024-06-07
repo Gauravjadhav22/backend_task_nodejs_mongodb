@@ -92,7 +92,9 @@ const getPosts = async (req: Request, res: Response) => {
         tags: "$tags.name",
       },
     });
-
+    if (Object.keys(matchStage).length > 0) {
+      pipeline.push({ $match: matchStage });
+    }
     // Execute the aggregation pipeline
     const posts = await Post.aggregate(pipeline);
 
@@ -110,9 +112,8 @@ const getPosts = async (req: Request, res: Response) => {
 const createPost = async (req: Request, res: Response) => {
   try {
     const tagIds = [];
-    let tags = JSON.parse(req.body.tags);;
- 
-  
+    let tags = JSON.parse(req.body.tags);
+
     for (const tagName of tags || []) {
       let tag = await Tag.findOne({ name: tagName });
       if (!tag) {
@@ -123,26 +124,26 @@ const createPost = async (req: Request, res: Response) => {
     }
     const imageUrls: string[] = [];
     if (req.files && Array.isArray(req.files)) {
-        const uploadPromises = req.files.map((file,index) => {
-            return new Promise<string>((resolve, reject) => {
-              const stream = cloudinary.uploader.upload_stream(
-                {
-                  folder: "nodejsTask",
-                  use_filename: false,
-                  unique_filename: true,
-                  overwrite: false,
-                },
-                (error, result) => {
-                  if (error) return reject(error);
-                  resolve(result.secure_url);
-                }
-              );
-              stream.end(req.files[index].buffer);
-            });
-          });
-      
-          const results = await Promise.all(uploadPromises);
-          imageUrls.push(...results);
+      const uploadPromises = req.files.map((file, index) => {
+        return new Promise<string>((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              folder: "nodejsTask",
+              use_filename: false,
+              unique_filename: true,
+              overwrite: false,
+            },
+            (error, result) => {
+              if (error) return reject(error);
+              resolve(result.secure_url);
+            }
+          );
+          stream.end(req.files[index].buffer);
+        });
+      });
+
+      const results = await Promise.all(uploadPromises);
+      imageUrls.push(...results);
     } else {
       return res.status(400).json({ message: "Image file is required" });
     }

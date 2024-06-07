@@ -22,9 +22,6 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_URL_API_SECRETE, 
 });
 
-// Log the configuration
-console.log(cloudinary.config());
-
 app.get("/health", (req, res) => {
   res.send("welcome to the app!..");
 });
